@@ -23,7 +23,7 @@ shiftWin     = [400 1800];
 % IMPORTANT:
 % Old noise window [2400 2600] does NOT fit when shiftWin = [400 1800].
 % Choose a quieter region inside the cropped range.
-noiseWin     = [1180 1220];
+noiseWin     = [800 820];
 
 % Analysis windows where real Raman peaks are expected
 analWins     = [ ...
@@ -49,7 +49,7 @@ pipelines{end+1} = struct( ...
     'useSNV', true, ...
     'useVectorNorm', false, ...
     'sgolayOrder', 2, ...
-    'sgolayFrame', 11, ...
+    'sgolayFrame', 9, ...
     'sgolayDeriv', 0, ...
     'aslsLambda', [], ...
     'aslsP', [], ...
@@ -60,9 +60,9 @@ pipelines{end+1} = struct( ...
     'name', 'Current_msbackadj_noSNV_SG', ...
     'baseline', 'msbackadj', ...
     'useSNV', false, ...
-    'useVectorNorm', true, ...
+    'useVectorNorm', false, ...
     'sgolayOrder', 2, ...
-    'sgolayFrame', 11, ...
+    'sgolayFrame', 9, ...
     'sgolayDeriv', 0, ...
     'aslsLambda', [], ...
     'aslsP', [], ...
@@ -75,11 +75,11 @@ pipelines{end+1} = struct( ...
     'useSNV', true, ...
     'useVectorNorm', false, ...
     'sgolayOrder', 2, ...
-    'sgolayFrame', 11, ...
+    'sgolayFrame', 9, ...
     'sgolayDeriv', 0, ...
-    'aslsLambda', 1e6, ...
-    'aslsP', 0.001, ...
-    'aslsNIter', 15 );
+    'aslsLambda', 1e4, ...
+    'aslsP', 1e-4, ...
+    'aslsNIter', 10 );
 
 % 4) AsLS + vector norm + SG
 pipelines{end+1} = struct( ...
@@ -88,10 +88,10 @@ pipelines{end+1} = struct( ...
     'useSNV', false, ...
     'useVectorNorm', true, ...
     'sgolayOrder', 2, ...
-    'sgolayFrame', 11, ...
+    'sgolayFrame', 9, ...
     'sgolayDeriv', 0, ...
-    'aslsLambda', 1e6, ...
-    'aslsP', 0.001, ...
+    'aslsLambda', 1e4, ...
+    'aslsP', 1e-4, ...
     'aslsNIter', 15 );
 
 % 5) AsLS + SG first derivative + SNV
@@ -101,11 +101,11 @@ pipelines{end+1} = struct( ...
     'useSNV', true, ...
     'useVectorNorm', false, ...
     'sgolayOrder', 2, ...
-    'sgolayFrame', 15, ...
+    'sgolayFrame', 9, ...
     'sgolayDeriv', 1, ...
-    'aslsLambda', 1e6, ...
-    'aslsP', 0.001, ...
-    'aslsNIter', 15 );
+    'aslsLambda', 1e4, ...
+    'aslsP', 1e-4, ...
+    'aslsNIter', 10 );
 
 %% LOAD INDIVIDUAL SPECTRA
 
@@ -158,24 +158,27 @@ for p = 1:numel(pipelines)
     for t = 1:nTime
         Xraw = D(t).Xraw;
 
-        [Xproc, Xbasecorr, Xbaseline] = preprocessMatrix(Xraw, x, pipe);
+        xmean_raw = mean(Xraw, 1);
+        [xmean_proc, xmean_basecorr, xmean_baseline] = preprocessSingle(xmean_raw, x, pipe);
 
-        M = computeMetrics(Xraw, Xproc, Xbasecorr, x, noiseWin, analWins);
+        [Xproc_ind, Xbasecorr_ind, Xbaseline_ind] = preprocessMatrix(Xraw, x, pipe);
 
-        Results(p).time(t).timeLabel    = D(t).timeLabel;
-        Results(p).time(t).nSpectra     = size(Xraw,1);
+        M = computeMetrics(Xraw, Xproc_ind, Xbasecorr_ind, x, noiseWin, analWins);
+
+        Results(p).time(t).timeLabel = D(t).timeLabel;
+        Results(p).time(t).nSpectra = size(Xraw,1);
         Results(p).time(t).Xraw         = Xraw;
-        Results(p).time(t).Xproc        = Xproc;
-        Results(p).time(t).Xbasecorr    = Xbasecorr;
-        Results(p).time(t).Xbaseline    = Xbaseline;
+        Results(p).time(t).Xproc        = Xproc_ind;
+        Results(p).time(t).Xbasecorr    = Xbasecorr_ind;
+        Results(p).time(t).Xbaseline    = Xbaseline_ind;
         Results(p).time(t).metrics      = M;
-        Results(p).time(t).meanRaw      = mean(Xraw, 1);
-        Results(p).time(t).meanProc     = mean(Xproc, 1);
-        Results(p).time(t).stdProc      = std(Xproc, 0, 1);
+        Results(p).time(t).meanRaw      = xmean_raw;
+        Results(p).time(t).meanProc     = xmean_proc;
+        Results(p).time(t).stdProc      = std(Xproc_ind, 0, 1);
 
         allMetrics = [allMetrics; M]; %#ok<AGROW>
-        allProc    = [allProc; Xproc]; %#ok<AGROW>
-        allTimeId  = [allTimeId; t*ones(size(Xproc,1),1)]; %#ok<AGROW>
+        allProc    = [allProc; Xproc_ind]; %#ok<AGROW>
+        allTimeId  = [allTimeId; t*ones(size(Xproc_ind,1),1)]; %#ok<AGROW>
     end
 
     Results(p).allMetrics = allMetrics;
@@ -428,9 +431,6 @@ function D = collectShakeflaskSpectra(baseDir, wantedFlask, power_mw, t_ms, shif
             x = x(mask);
             y = y(mask);
 
-            % mild spike suppression before comparison
-            y = hampel(y, 11, 3);
-
             if isempty(xRef)
                 xRef = x;
                 Xraw = zeros(numel(files), numel(xRef));
@@ -472,12 +472,14 @@ end
 function [yProc, yBaseCorr, yBaseline] = preprocessSingle(yRaw, x, pipe)
 
     y = yRaw(:);
+    %y = hampel(y, 11, 3);
+    %y = medfilt1(y, 3);
 
     switch lower(pipe.baseline)
         case 'msbackadj'
             yAdj = msbackadj(x(:), y, ...
                 'WindowSize', 160, ...
-                'StepSize', 70, ...
+                'StepSize', 75, ...
                 'EstimationMethod', 'quantile', ...
                 'QuantileValue', 0.10);
             yBaseline = y - yAdj;
@@ -493,46 +495,6 @@ function [yProc, yBaseCorr, yBaseline] = preprocessSingle(yRaw, x, pipe)
 
     yWork = yBaseCorr;
 
-    % --- Savitzky-Golay smoothing (use sgolayfilt derivative signature if supported) ---
-    
-% --- SG smoothing / derivative using sgolay coefficients (robust) ---
-frame = round(pipe.sgolayFrame);
-npts  = numel(yWork);
-
-% clamp frame to signal length and ensure odd and > order
-frame = min(frame, npts);
-if mod(frame,2) == 0, frame = frame - 1; end
-if frame <= pipe.sgolayOrder
-    frame = pipe.sgolayOrder + 1;
-    if mod(frame,2) == 0, frame = frame + 1; end
-end
-
-if frame > npts
-    % too short: skip
-else
-    % compute SG matrix/coefficients
-    k = pipe.sgolayOrder;
-    % sgolay returns matrix g of size frame x (k+1)
-    g = sgolay(k, frame);
-
-    if pipe.sgolayDeriv == 0
-        % smoothing only: use central convolution vector (column 1)
-        coeff = g(:,1) / sum(g(:,1)); % normalize (sgolay returns polynomial basis; normalization keeps scale)
-        yWork = conv(yWork, coeff(end:-1:1), 'same'); % flip for conv alignment
-    else
-        der = max(0, min(round(pipe.sgolayDeriv), frame-1));
-        dx = mean(diff(x));
-        if dx <= 0 || ~isfinite(dx)
-            error('Invalid dx computed from x: %g', dx);
-        end
-        % SG derivative coefficients: factorial scaling / dx^der
-        % g(:, der+1) gives polynomial coefficients for derivative order 'der'
-        coeff = g(:, der+1) * factorial(der) / (dx^der);
-        % convolution (flip for alignment)
-        yWork = conv(yWork, coeff(end:-1:1), 'same');
-    end
-end
-
     % Normalization
     if pipe.useSNV
         mu = mean(yWork);
@@ -541,6 +503,37 @@ end
     elseif pipe.useVectorNorm
         nv = norm(yWork);
         yWork = yWork ./ max(nv, eps);
+    end
+    
+    % --- Savitzky-Golay smoothing / derivative ---
+    frame = round(pipe.sgolayFrame);
+    order = pipe.sgolayOrder;
+    
+    % Ensure frame is valid: odd, > order, and not longer than signal
+    frame = min(frame, numel(yWork));
+    if mod(frame,2) == 0
+        frame = frame - 1;
+    end
+    if frame <= order
+        frame = order + 2;
+        if mod(frame,2) == 0
+            frame = frame + 1;
+        end
+    end
+    
+    if frame <= numel(yWork)
+        if pipe.sgolayDeriv == 0
+            % Same SG smoothing as in the other preprocessing scripts
+            yWork = sgolayfilt(yWork, order, frame);
+        else
+            % Keep derivative implementation
+            [~, g] = sgolay(order, frame);
+            d = pipe.sgolayDeriv;
+            dx = mean(diff(x));
+            coeffs = factorial(d) * g(:,d+1)' / (dx^d);
+            yDer = conv(yWork, coeffs, 'same');
+            yWork = yDer;
+        end
     end
 
     yProc = yWork(:).';
@@ -595,11 +588,11 @@ function M = computeMetrics(Xraw, Xproc, Xbasecorr, x, noiseWin, analWins)
         yProc = Xproc(i,:);
         yBase = Xbasecorr(i,:);
 
-        noiseStd = std(yBase(maskN));
-        peakSig  = max(abs(yProc(maskA)));
+        noiseStd_proc = std(yProc(maskN));
+        peakSig_proc  = max(abs(yProc(maskA)));
 
-        M.noiseStd(i)         = noiseStd;
-        M.peakToNoise(i)      = peakSig / max(noiseStd, eps);
+        M.noiseStd(i)         = noiseStd_proc;
+        M.peakToNoise(i)      = peakSig_proc / max(noiseStd_proc, eps);
         M.baselineMean(i)     = mean(yBase(maskN));
         M.fracNegative(i)     = mean(yBase(maskN) < 0);
         M.roughness(i)        = std(diff(yProc));
