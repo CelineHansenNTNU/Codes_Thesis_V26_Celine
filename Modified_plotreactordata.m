@@ -161,14 +161,15 @@ readmq=snr_spectrum_from_files_4(MQfiles,[-100,4000]);
 
 
 %%
-model=load("Multi_VB_res_msbackadj_SNVon.mat");
+%model=load("Multi_VB_res_msbackadj_SNVon.mat");
 %model=load("Multi_VB_res_msbackadj_noSNV.mat");
 %model=load("Multi_VB_res_asls_SNVon.mat");
 %model = load("Multi_VB_res_asls_noSNV.mat");
+%model = load("SF_VB_70_30_MultiPLSR_SF9_MS_withSNV.mat");
 %model = load("SF_VB_70_30_MultiPLSR_SF9_MS_withSNV_maxLV20.mat");
-%model = load("SF_VB_70_30_MultiPLSR_SF9_asls_withSNV_maxLV20.mat");
-%predictionvector=model.out.BETA_locked;
-predictionvector=model.results.BETA;
+model = load("SF_VB_70_30_MultiPLSR_SF9_asls_withSNV_maxLV20.mat");
+predictionvector=model.out.BETA_locked;
+%predictionvector=model.results.BETA;
 reactorA=load("/Users/celinehansen/Documents/NMPC/Matlab/Raman_HPLC_master/bioreactor_package/20260422_10_49_39_W17_RAMAN_Glucose_A2.mat");
 reactorB=load("/Users/celinehansen/Documents/NMPC/Matlab/Raman_HPLC_master/bioreactor_package/20260422_11_20_20_W17_RAMAN_Glucose_B2.mat");
 reactorAbiomassntime=[reactorA.VarMem.measurements(:,2),reactorA.VarMem.ProcTime'+posixtime(datetime(reactorA.clk_0))];
@@ -396,6 +397,66 @@ sugarpreds2_corr = sugarpreds2 - sugarpreds2(1,:) + hplcB0;
 % Optional: only for visualisation
 sugarpreds_corr  = max(sugarpreds_corr, 0);
 sugarpreds2_corr = max(sugarpreds2_corr, 0);
+
+%% RMSEP and R2 for Raman predictions against HPLC
+% Raw absolute Raman predictions
+predA = sugarpreds;
+predB = sugarpreds2;
+
+% Offse-corrected Raman predictions
+%predA = sugarpreds_corr;
+%predB = sugarpreds2_corr;
+
+hplcA_eval = cell2mat(hplc_sugarntime_A(:,1:3)).*(4/5);
+hplcB_eval = cell2mat(hplc_sugarntime_B(:,1:3)).*(4/5);
+
+RMSEP_A_raw = nan(1,3);
+RMSEP_B_raw = nan(1,3);
+R2_A = nan(1,3);
+R2_B = nan(1,3);
+
+for i = 1:3
+    % Interpolate Raman predictions to HPLC sampling times
+    ypredA = interp1(tRamanA, predA(:,i), tHPLCA, 'linear', NaN);
+    ypredB = interp1(tRamanB, predB(:,i), tHPLCB, 'linear', NaN);
+
+    ytrueA = hplcA_eval(:,i);
+    ytrueB = hplcB_eval(:,i);
+
+    % Remove NaN and invalid points
+    validA = ~isnan(ytrueA) & ~isnan(ypredA);
+    validB = ~isnan(ytrueB) & ~isnan(ypredB);
+
+    ytrueA = ytrueA(validA);
+    ypredA = ypredA(validA);
+
+    ytrueB = ytrueB(validB);
+    ypredB = ypredB(validB);
+
+    % is using offset correction based on first HPLC point, exclude the
+    % first point from evaluation to avoid optimistic metrics
+    ytrueA = ytrueA(2:end);
+    ypredA = ypredA(2:end);
+    ytrueB = ytrueB(2:end);
+    ypredB = ypredB(2:end);
+
+    % RMSEP
+    RMSEP_A(i) = sqrt(mean((ytrueA - ypredA).^2));
+    RMSEP_B(i) = sqrt(mean((ytrueB - ypredB).^2));
+
+    % R2
+    R2_A(i) = 1 - (sum((ytrueA - ypredA).^2) / sum((ytrueA - mean(ytrueA)).^2));
+    R2_B(i) = 1 - (sum((ytrueB - ypredB).^2) / sum((ytrueB - mean(ytrueB)).^2));
+end
+
+% Collect results in tables
+metrics_A = table(sugarorder', RMSEP_A', R2_A', 'VariableNames', {'Sugar', 'RMSEP_mM', 'R2'});
+metrics_B = table(sugarorder', RMSEP_B', R2_B', 'VariableNames', {'Sugar', 'RMSEP_mM', 'R2'});
+disp('Reactor A prediction metrics:');
+disp(metrics_A)
+disp('Reactor B prediction metrics:');
+disp(metrics_B)
+
 
 %% Separate comparison figure: Raman vs HPLC for each sugar
 
