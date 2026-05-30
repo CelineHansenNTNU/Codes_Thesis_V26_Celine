@@ -1,6 +1,6 @@
 
 function [X_processed, ramanShift, X_raw] = PreprocessingSpectras_AsLS(inputData, ramanShiftOrRange, useSNV)
-% Flexible preprocessing of Raman spectra: AsLS baseline -> SNV (opt) -> SG
+% Flexible preprocessing of Raman spectra: AsLS baseline -> SNV (opt) or mean-centering -> SG
 % Usage:
 %  [X_processed, ramanShift, X_raw] = PreprocessingSpectras2_AsLS(spectrumFiles, shiftRange, useSNV)
 %  [X_processed, ramanShift, X_raw] = PreprocessingSpectras2_AsLS(Xin, ramanShift, useSNV)
@@ -11,7 +11,7 @@ function [X_processed, ramanShift, X_raw] = PreprocessingSpectras_AsLS(inputData
         useSNV = true;
     end
 
-    % --- Input handling (same two modes as original) ---
+    % Input handling 
     if iscell(inputData)
         spectrumFiles = inputData;
         shiftRange = ramanShiftOrRange;
@@ -62,7 +62,7 @@ function [X_processed, ramanShift, X_raw] = PreprocessingSpectras_AsLS(inputData
     x = ramanShift(:);
     nSpec = size(X,1);
 
-    % --- AsLS baseline correction parameters (tweak as needed) ---
+    % AsLS baseline correction parameters (change as needed)
     lambda = 1e4;    % smoothness (increase -> smoother baseline)
     p      = 1e-4;  % asymmetry (small -> baseline stays below peaks)
     nIter  = 10;     % IRLS iterations
@@ -79,8 +79,8 @@ function [X_processed, ramanShift, X_raw] = PreprocessingSpectras_AsLS(inputData
         X(i, :) = (yi - z).';
     end
 
-    % --- Savitzky-Golay smoothing ---
-    % SG parameters (tweak as needed)
+    % Savitzky-Golay smoothing
+    % SG parameters (change as needed)
     sgOrder = 2;
     sgFrame = 9; % must be odd and > sgOrder
     % apply filter along dimension 2 (rows are spectra)
