@@ -1,5 +1,5 @@
 function out = SF_VB_70_30_MultiSugarPLSR_MeanSpec(trainRootDir, hplcExcelPath, predictRootDir, opts)
-% Shake flask multivariate PLSR using:
+% Shake flask multi-response PLSR using:
 %   - one mean RAW spectrum per shakeflask per timepoint (SF/T)
 %   - preprocessing of that mean spectrum
 %   - 70/30 split on SF/T groups
