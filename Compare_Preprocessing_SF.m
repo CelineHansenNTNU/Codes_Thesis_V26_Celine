@@ -1,4 +1,4 @@
-%% Compare_Preprocessing_Shakeflask_IndividualSpectra
+%% Compare_Preprocessing_Methods_On_SF_for_preliminary_analysis
 % Compare preprocessing pipelines on INDIVIDUAL Raman spectra
 % for one selected shakeflask across all timepoints.
 %
